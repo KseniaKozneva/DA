@@ -1,0 +1,194 @@
+\section{Описание}
+Требуется реализовать поразрядную сортировку для последовательности пар \enquote{ключ-значение}.
+Ключ представляет собой автомобильный номер в формате \texttt{A 999 BC} (буквы латинского алфавита, 
+цифры и пробелы на фиксированных позициях).
+
+Ключ имеет фиксированную длину 8 символов, при этом позиции 1 и 5 (нумерация с 0) всегда содержат пробелы 
+и не влияют на сортировку. Остальные 6 позиций (буквы и цифры) участвуют в упорядочивании.
+
+Поразрядная сортировка (radix sort) - это алгоритм, который использовался в машинах, предназначенных для сортировки перфокарт.
+В алгоритме поразрядной сортировки сначала производится сортировка по младшей цифре, после чего перфокарты снова объединяются в одну 
+колоду, в которой сначала идут перфокарты из нулевого приемника, затем - из первого приемника, затем - из второго и т.д.
+После этого вся колода снова сортируется по предпоследней цифре, и перфокарты вновь собираются в одну стопку тем же образом.
+Процесс прдолжается до тех пор, пока перфокарты не окажутся отсортированными по всем d цифрам. После этого перфокарты
+оказываются полностью отсортированы в порядке возрастания d-значных чисел.  \cite{Kormen}.
+
+В данной работе алгоритм реализован в три этапа для каждого разряда:
+\begin{enumerate}
+\item Подсчёт частот символов на текущей позиции ключа в массиве счётчиков размера $256$.
+\item Преобразование массива частот в массив префиксных сумм для определения итоговых позиций.
+\item Размещение элементов во временном массиве индексов при проходе справа налево, 
+что обеспечивает стабильность сортировки.
+\end{enumerate}
+
+Проход справа налево нужен для сохранения исходного порядка элементов с одинаковыми ключами
+(стабильность сортировки).
+
+Асимптотика реализации:
+\begin{itemize}
+\item время: $O(m \cdot (n + k))$, где $n$ - число пар, $k = 256$, $m = 6$ (количество значимых разрядов);
+\item дополнительная память: $O(n)$ для хранения индексов (без учёта хранения исходных данных).
+\end{itemize}
+
+\pagebreak
+
+\section{Исходный код}
+Программа состоит из функции поразрядной сортировки \texttt{RadixSort} и функции \texttt{main}.
+
+Для хранения элементов используются псевдонимы типов:
+\begin{itemize}
+\item \texttt{TKey} - тип ключа (\texttt{std::string}), автомобильный номер в формате \texttt{A 999 BC} (8 символов);
+\item \texttt{TValue} - тип значения (\texttt{std::string}), строка переменной длины (до 64 символов);
+\item \texttt{TObject} - пара \texttt{std::pair<TKey, TValue>}.
+\end{itemize}
+
+Также задаются константы:
+\begin{itemize}
+\item \texttt{KEY\_LENGTH = 8} - фиксированная длина ключа;
+\item \texttt{FIRST\_SPACE\_POS = 1} и \texttt{SECOND\_SPACE\_POS = 5} - позиции пробелов в ключе (нумерация с 0);
+\item \texttt{ASCII\_SIZE = 256} - мощность алфавита для поразрядной сортировки;
+\item \texttt{VALUE\_LENGTH = 64} - максимальная длина значения (в данной реализации не используется для добивки).
+\end{itemize}
+
+\textbf{Логика функции \texttt{RadixSort(std::vector<TObject>\& objects)}:}
+\begin{enumerate}
+\item Если входной массив пуст, функция сразу завершает работу.
+\item Для оптимизации памяти создаются два массива индексов: 
+\texttt{indices} и \texttt{tempIndices} размером \texttt{objects.size()}.
+Массив \texttt{indices} инициализируется значениями 0, 1, 2, ..., что соответствует исходному порядку элементов.
+\item Выполняется поразрядная сортировка по 8 разрядам (символам) ключа, начиная с младшего (справа):
+
+\begin{enumerate}
+\item Если текущая позиция соответствует пробелу (позиции 1 или 5), она пропускается, так как пробелы не влияют на порядок сортировки.
+\item Для остальных позиций создаётся массив счётчиков \texttt{std::array<int, ASCII\_SIZE> count\{\}}.
+\item Выполняется подсчёт частот символов на текущей позиции:
+\texttt{++count[static\_cast<unsigned char>(objects[indices[i]].first[digitPos])]}.
+\item Строятся префиксные суммы: каждая ячейка \texttt{count[i]} хранит количество символов с кодом не больше \texttt{i}.
+\item Выполняется проход по \texttt{indices} с конца к началу для сохранения стабильности сортировки. Для каждого элемента вычисляется итоговая позиция  \texttt{position = count[digit] - 1}, после чего индекс элемента помещается в \texttt{tempIndices[position]}.
+\item Массивы \texttt{indices} и \texttt{tempIndices} меняются местами через \texttt{swap}, чтобы использовать обновлённый порядок на следующем разряде.
+\end{enumerate}
+
+\item После завершения всех проходов создаётся результирующий массив \texttt{result} с зарезервированной памятью.
+\item Выполняется проход по отсортированному массиву индексов \texttt{indices} и перемещение объектов в правильном порядке:
+\texttt{result.emplace\_back(std::move(objects[indices[i]]))}. Использование \texttt{std::move} позволяет избежать копирования строк.
+\item Исходный массив \texttt{objects} и результирующий массив \texttt{result} меняются местами через \texttt{swap}.
+\end{enumerate}
+
+\textbf{Логика функции \texttt{main}:}
+\begin{enumerate}
+\item Создаётся вектор \texttt{objects} для хранения пар ключ-значение.
+\item В цикле считываются пары \texttt{key} и \texttt{value} из стандартного потока:
+\texttt{std::getline(std::cin, key, '\textbackslash t')} читает ключ до символа табуляции,
+\texttt{std::getline(std::cin, value)} читает значение до конца строки.
+\item Если значение содержит символ возврата каретки \texttt{\textbackslash r} (Windows-формат), он удаляется с помощью \texttt{value.pop\_back()}.
+\item Считанная пара добавляется в вектор через \texttt{objects.emplace\_back(std::move(key), std::move(value))} для минимизации копирований.
+\item После завершения ввода вызывается функция сортировки \texttt{RadixSort(objects)}.
+\item Отсортированные пары выводятся в формате \texttt{key\textbackslash tvalue} (ключ, символ табуляции, значение, перевод строки).
+\end{enumerate}
+\pagebreak
+\begin{lstlisting}[language=C++]
+#include <algorithm>
+#include <array>
+#include <iostream>
+#include <string>
+#include <vector>
+
+const int KEY_LENGTH = 8;
+const int FIRST_SPACE_POS = 1;
+const int SECOND_SPACE_POS = 5;
+const int ASCII_SIZE = 256;
+const int VALUE_LENGTH = 64;
+
+using TKey = std::string;
+using TValue = std::string;
+using TObject = std::pair<TKey, TValue>;
+
+void RadixSort(std::vector<TObject>& objects) {
+    if (objects.empty()) {
+        return;
+    }
+
+    const size_t size = objects.size();
+    std::vector<size_t> indices(size);
+    std::vector<size_t> tempIndices(size);
+    std::array<int, ASCII_SIZE> count{};
+    
+    for (size_t i = 0; i < size; ++i) {
+        indices[i] = i;
+    }
+
+    for (int digitPos = KEY_LENGTH - 1; digitPos >= 0; --digitPos) {
+        if (digitPos == FIRST_SPACE_POS || digitPos == SECOND_SPACE_POS) {
+            continue;
+        }
+
+        count.fill(0);
+
+        for (size_t i = 0; i < size; ++i) {
+            ++count[static_cast<unsigned char>(objects[indices[i]].first[digitPos])];
+        }
+
+        for (int i = 1; i < ASCII_SIZE; ++i) {
+            count[i] += count[i - 1];
+        }
+
+        for (int i = static_cast<int>(size) - 1; i >= 0; --i) {
+            unsigned char digit = static_cast<unsigned char>(
+                objects[indices[i]].first[digitPos]);
+            tempIndices[--count[digit]] = indices[i];
+        }
+
+        indices.swap(tempIndices);
+    }
+
+    std::vector<TObject> result;
+    result.reserve(size);
+    for (size_t i = 0; i < size; ++i) {
+        result.emplace_back(std::move(objects[indices[i]]));
+    }
+    objects.swap(result);
+}
+
+int main() {
+    std::vector<TObject> objects;
+    
+    TKey key;
+    TValue value;
+
+    while (std::getline(std::cin, key, '\t') && std::getline(std::cin, value)) {
+        if (!value.empty() && value.back() == '\r') {
+            value.pop_back();
+        }
+        
+        objects.emplace_back(std::move(key), std::move(value));
+    }
+
+    RadixSort(objects);
+
+    for (const TObject& obj : objects) {
+        std::cout << obj.first << '\t' << obj.second << '\n';
+    }
+
+    return 0;
+}
+	
+\end{lstlisting}
+
+\pagebreak
+
+\section{Консоль}
+\begin{alltt}
+PS C:\textbackslash Users\textbackslash Administrator\textbackslash Desktop\textbackslash дискретный_анализ\textbackslash lab1> g++ main.cpp -o main.exe          
+PS C:\textbackslash Users\textbackslash Administrator\textbackslash Desktop\textbackslash дискретный_анализ\textbackslash lab1> cat input.txt           
+A 000 AA        n399tann9nnt3ttnaaan9nann93na9t3a3t9999na3aan9antt3tn93aat3naatt
+Z 999 ZZ        n399tann9nnt3ttnaaan9nann93na9t3a3t9999na3aan9antt3tn93aat3naat
+A 000 AA        n399tann9nnt3ttnaaan9nann93na9t3a3t9999na3aan9antt3tn93aat3naa 
+Z 999 ZZ        n399tann9nnt3ttnaaan9nann93na9t3a3t9999na3aan9antt3tn93aat3na  
+PS C:\textbackslash Users\textbackslash Administrator\textbackslash Desktop\textbackslash дискретный_анализ\textbackslash lab1> Get-Content input.txt \textbar .\textbackslash main.exe
+A 000 AA        n399tann9nnt3ttnaaan9nann93na9t3a3t9999na3aan9antt3tn93aat3naatt
+A 000 AA        n399tann9nnt3ttnaaan9nann93na9t3a3t9999na3aan9antt3tn93aat3naa  
+Z 999 ZZ        n399tann9nnt3ttnaaan9nann93na9t3a3t9999na3aan9antt3tn93aat3naat 
+Z 999 ZZ        n399tann9nnt3ttnaaan9nann93na9t3a3t9999na3aan9antt3tn93aat3na  
+\end{alltt}
+\pagebreak
+
